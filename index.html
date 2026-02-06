@@ -1,361 +1,383 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Trunks Log v3.7</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap');
-        body { 
-            font-family: 'Noto Sans JP', sans-serif; 
-            -webkit-tap-highlight-color: transparent;
-            margin: 0; padding: 0;
-            overflow: hidden; /* Prevent body scroll when modal open */
-            background-color: #020617;
-        }
-        .custom-scrollbar::-webkit-scrollbar { display: none; }
-        .modal-layer {
-            position: fixed;
-            inset: 0;
-            z-index: 100;
-            display: flex;
-            flex-direction: column;
-            background-color: rgba(2, 6, 23, 0.98);
-            backdrop-blur: 10px;
-        }
-        .modal-content {
-            flex: 1;
-            overflow-y: auto;
-            padding: 2rem;
-            padding-bottom: 5rem;
-        }
-        .filter-chip {
-            white-space: nowrap;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .version-tag { position: fixed; top: 10px; right: 10px; font-size: 8px; opacity: 0.3; pointer-events: none; z-index: 10; color: white; }
-    </style>
-</head>
-<body class="text-white">
-    <div id="root"></div>
-    <div class="version-tag">v3.7.0-filter-layer</div>
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Menu, 
+  Plus, 
+  Trash2, 
+  Search, 
+  X, 
+  Save, 
+  Database,
+  Wind,
+  Layers,
+  Image as ImageIcon,
+  Sun,
+  Moon,
+  Settings,
+  ArrowLeft,
+  LayoutGrid
+} from 'lucide-react';
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.21.0/babel.min.js"></script>
+const App = () => {
+  const STORAGE_KEY = 'trunks_log_data';
+  const SETTINGS_KEY = 'trunks_log_settings';
 
-    <script type="text/babel">
-        const { useState, useEffect, useMemo, useRef } = React;
+  // --- States ---
+  const [notes, setNotes] = useState([]);
+  const [activeNoteId, setActiveNoteId] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [currentView, setCurrentView] = useState('editor'); // 'editor', 'settings', 'gallery'
+  const [darkMode, setDarkMode] = useState(false);
+  const [cacheSize, setCacheSize] = useState('0 KB');
+  const fileInputRef = useRef(null);
 
-        const Svg = {
-            History: () => <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>,
-            Calendar: () => <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>,
-            Settings: () => <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
-            Plus: () => <svg width="28" height="28" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>,
-            Trash: () => <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>,
-            X: () => <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>,
-            Download: () => <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="3" y2="15"/></svg>,
-            Image: () => <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
-        };
+  // --- Constants ---
+  const TRUNKS_DESIGNS = [
+    { id: 'check', label: 'チェック', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
+    { id: 'stripe', label: 'ストライプ', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
+    { id: 'plain', label: '無地', color: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' },
+    { id: 'pattern', label: '総柄', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' },
+    { id: 'special', label: '特別仕様', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' }
+  ];
 
-        const App = () => {
-            const [view, setView] = useState('history');
-            const [logs, setLogs] = useState([]);
-            const [theme, setTheme] = useState('dark');
-            const [activeFilter, setActiveFilter] = useState('すべて');
-            const [capturedImage, setCapturedImage] = useState(null);
-            const [selectedLog, setSelectedLog] = useState(null);
-            const [calDate, setCalDate] = useState(new Date());
-            const [brand, setBrand] = useState('');
-            const [design, setDesign] = useState('チェック');
-            const [memo, setMemo] = useState('');
-            const [isExporting, setIsExporting] = useState(false);
+  // --- Effects ---
+  useEffect(() => {
+    const savedNotes = localStorage.getItem(STORAGE_KEY);
+    if (savedNotes) {
+      try { setNotes(JSON.parse(savedNotes)); } catch (e) { console.error(e); }
+    }
+    const savedSettings = localStorage.getItem(SETTINGS_KEY);
+    if (savedSettings) {
+      try {
+        const settings = JSON.parse(savedSettings);
+        setDarkMode(settings.darkMode || false);
+      } catch (e) { console.error(e); }
+    }
+    calculateCacheSize();
+  }, []);
 
-            const fileInputRef = useRef(null);
-            const designOptions = ['チェック', 'ストライプ', '無地', '派手柄', 'キャラクター', 'ドット', 'ボタニカル', '幾何学模様', 'その他'];
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
+    calculateCacheSize();
+  }, [notes]);
 
-            useEffect(() => {
-                const saved = localStorage.getItem('trunks_log_v3_stable');
-                if (saved) setLogs(JSON.parse(saved));
-                const t = localStorage.getItem('trunks_theme');
-                if (t) setTheme(t);
-            }, []);
+  useEffect(() => {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ darkMode }));
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
 
-            const saveLogs = (newLogs) => {
-                setLogs(newLogs);
-                localStorage.setItem('trunks_log_v3_stable', JSON.stringify(newLogs));
-            };
+  // --- Handlers ---
+  const calculateCacheSize = () => {
+    try {
+      const data = JSON.stringify(localStorage);
+      const sizeInBytes = new Blob([data]).size;
+      setCacheSize(sizeInBytes < 1024 ? `${sizeInBytes} B` : `${(sizeInBytes / 1024).toFixed(2)} KB`);
+    } catch (e) { setCacheSize('Unknown'); }
+  };
 
-            const downloadImage = (base64, filename) => {
-                const link = document.createElement("a");
-                link.href = base64;
-                link.download = filename;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            };
+  const createNewNote = () => {
+    const newNote = {
+      id: Date.now().toString(),
+      title: '',
+      content: '',
+      design: 'plain',
+      image: null,
+      updatedAt: new Date().toISOString()
+    };
+    setNotes([newNote, ...notes]);
+    setActiveNoteId(newNote.id);
+    setCurrentView('editor');
+    setIsSidebarOpen(false);
+  };
 
-            const exportBackup = () => {
-                setIsExporting(true);
-                const dataStr = JSON.stringify(logs, null, 2);
-                const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-                const exportFileDefaultName = `trunks_log_backup_${new Date().toISOString().slice(0,10)}.json`;
-                const linkElement = document.createElement('a');
-                linkElement.setAttribute('href', dataUri);
-                linkElement.setAttribute('download', exportFileDefaultName);
-                linkElement.click();
-                setTimeout(() => setIsExporting(false), 1000);
-            };
+  const updateNote = (field, value) => {
+    setNotes(notes.map(n => 
+      n.id === activeNoteId 
+        ? { ...n, [field]: value, updatedAt: new Date().toISOString() } 
+        : n
+    ));
+  };
 
-            const handleFileChange = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (ev) => setCapturedImage(ev.target.result);
-                reader.readAsDataURL(file);
-                e.target.value = ''; 
-            };
+  const deleteNote = (id, e) => {
+    e?.stopPropagation();
+    if (window.confirm('このログを削除しますか？')) {
+      const updatedNotes = notes.filter(n => n.id !== id);
+      setNotes(updatedNotes);
+      if (activeNoteId === id) setActiveNoteId(null);
+    }
+  };
 
-            const handleSave = () => {
-                const newLog = {
-                    id: Date.now().toString(),
-                    date: new Date().toISOString(),
-                    image: capturedImage,
-                    brand, design, memo
-                };
-                saveLogs([newLog, ...logs]);
-                setCapturedImage(null);
-                setBrand(''); setMemo('');
-                setView('history');
-            };
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        updateNote('image', reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
-            const filteredLogs = useMemo(() => {
-                if (activeFilter === 'すべて') return logs;
-                return logs.filter(l => l.design === activeFilter);
-            }, [logs, activeFilter]);
+  const activeNote = notes.find(n => n.id === activeNoteId);
+  const filteredNotes = notes.filter(n => 
+    n.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    n.content.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
-            const calendarDays = useMemo(() => {
-                const y = calDate.getFullYear();
-                const m = calDate.getMonth();
-                const start = new Date(y, m, 1).getDay();
-                const end = new Date(y, m + 1, 0).getDate();
-                const arr = [];
-                for (let i = 0; i < start; i++) arr.push(null);
-                for (let i = 1; i <= end; i++) arr.push(i);
-                return arr;
-            }, [calDate]);
+  const imagesOnly = notes.filter(n => n.image);
 
-            const hasLog = (day) => {
-                if (!day) return false;
-                const dStr = new Date(calDate.getFullYear(), calDate.getMonth(), day).toLocaleDateString();
-                return logs.some(l => new Date(l.date).toLocaleDateString() === dStr);
-            };
+  const getDesign = (id) => TRUNKS_DESIGNS.find(d => d.id === id) || TRUNKS_DESIGNS[2];
 
-            const isDark = theme === 'dark';
-            const bg = isDark ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-900';
-            const card = isDark ? 'bg-slate-900/50 border-white/5 shadow-2xl backdrop-blur-sm' : 'bg-white border-slate-200 shadow-sm';
+  // --- UI Components ---
+  return (
+    <div className={`flex h-screen font-sans overflow-hidden transition-colors duration-300 ${darkMode ? 'bg-[#0f172a] text-slate-200' : 'bg-slate-50 text-slate-800'}`}>
+      
+      {/* Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 lg:hidden" onClick={() => setIsSidebarOpen(false)} />
+      )}
 
-            return (
-                <div className={`h-screen flex flex-col transition-all duration-500 ${bg}`}>
-                    
-                    <header className="pt-8 px-6 pb-2 flex justify-between items-center z-30">
-                        <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center font-black text-white shadow-lg">T</div>
-                            <span className="font-black text-xl tracking-tighter">TRUNKS LOG</span>
-                        </div>
-                    </header>
+      {/* Sidebar */}
+      <aside className={`fixed inset-y-0 left-0 z-50 w-72 border-r transition-transform duration-300 lg:relative lg:translate-x-0 
+        ${darkMode ? 'bg-[#1e293b] border-slate-700' : 'bg-white border-slate-200'} 
+        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        
+        <div className="flex flex-col h-full">
+          {/* Logo Section */}
+          <div className="p-5 flex items-center justify-between border-b border-transparent">
+            <h1 className="font-black text-xl flex items-center gap-2 text-indigo-500 tracking-tighter cursor-pointer" onClick={() => { setCurrentView('editor'); setActiveNoteId(null); }}>
+              <Wind size={24} strokeWidth={3} />
+              <span>TRUNKS LOG</span>
+            </h1>
+            <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden p-2 text-slate-400 hover:text-slate-200">
+              <X size={20} />
+            </button>
+          </div>
 
-                    {/* Filter Chips - Only History View */}
-                    {view === 'history' && (
-                        <div className="px-6 py-4 flex gap-2 overflow-x-auto custom-scrollbar no-scrollbar scroll-smooth">
-                            {['すべて', ...designOptions].map(opt => (
-                                <button
-                                    key={opt}
-                                    onClick={() => setActiveFilter(opt)}
-                                    className={`filter-chip px-5 py-2 rounded-full text-[10px] font-black tracking-widest uppercase border transition-all ${activeFilter === opt ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-600/30' : 'bg-white/5 border-white/10 opacity-40'}`}
-                                >
-                                    {opt}
-                                </button>
-                            ))}
-                        </div>
-                    )}
+          {/* Search */}
+          <div className="px-4 py-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
+              <input 
+                type="text"
+                placeholder="ログを検索..."
+                className={`w-full pl-10 pr-4 py-2 border-none rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none
+                  ${darkMode ? 'bg-slate-800 text-slate-200' : 'bg-slate-100 text-slate-800'}`}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+          </div>
 
-                    <main className="flex-grow overflow-y-auto px-5 pb-40 custom-scrollbar">
-                        
-                        {view === 'history' && (
-                            <div className="grid grid-cols-2 gap-4 animate-in fade-in duration-500">
-                                {filteredLogs.length === 0 ? (
-                                    <div className="col-span-2 py-32 text-center opacity-20 text-xs italic tracking-widest font-bold">NO ARCHIVES FOUND</div>
-                                ) : filteredLogs.map(log => (
-                                    <div key={log.id} onClick={() => setSelectedLog(log)} className={`rounded-3xl overflow-hidden border p-1 transform active:scale-95 transition ${card}`}>
-                                        <div className="aspect-[4/5] rounded-2xl overflow-hidden relative">
-                                            <img src={log.image} className="w-full h-full object-cover" loading="lazy" />
-                                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent flex flex-col justify-end p-3">
-                                                <p className="text-[10px] font-bold text-white truncate">{log.brand || '---'}</p>
-                                                <p className="text-[8px] text-white/40">{new Date(log.date).toLocaleDateString()}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+          {/* Navigation Items */}
+          <div className="px-2 mt-2 space-y-1">
+            <button 
+              onClick={() => { setCurrentView('gallery'); setIsSidebarOpen(false); }}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-bold transition-all ${currentView === 'gallery' ? (darkMode ? 'bg-indigo-900/30 text-indigo-400' : 'bg-indigo-50 text-indigo-600') : 'hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+            >
+              <LayoutGrid size={18} />
+              画像ギャラリー
+            </button>
+          </div>
 
-                        {view === 'calendar' && (
-                            <div className={`p-6 rounded-[2.5rem] border mt-4 animate-in zoom-in-95 duration-500 ${card}`}>
-                                <div className="flex justify-between items-center mb-8 px-2">
-                                    <h2 className="font-black text-2xl">{calDate.getFullYear()}.{calDate.getMonth()+1}</h2>
-                                    <div className="flex gap-4">
-                                        <button onClick={() => setCalDate(new Date(calDate.setMonth(calDate.getMonth()-1)))} className="p-2 opacity-30">◀</button>
-                                        <button onClick={() => setCalDate(new Date(calDate.setMonth(calDate.getMonth()+1)))} className="p-2 opacity-30">▶</button>
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-7 gap-1 text-center text-[9px] font-black opacity-30 mb-4 tracking-tighter">
-                                    {['SUN','MON','TUE','WED','THU','FRI','SAT'].map(d => <div key={d}>{d}</div>)}
-                                </div>
-                                <div className="grid grid-cols-7 gap-1">
-                                    {calendarDays.map((day, i) => (
-                                        <div key={i} className="aspect-square flex items-center justify-center relative">
-                                            {day && (
-                                                <div className={`w-10 h-10 flex items-center justify-center rounded-full text-xs font-bold ${hasLog(day) ? 'bg-blue-600 text-white shadow-lg' : 'opacity-30'}`}>
-                                                    {day}
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {view === 'settings' && (
-                            <div className="space-y-4 mt-4 animate-in slide-in-from-bottom-4 duration-500">
-                                <div className={`p-6 rounded-[2.5rem] border ${card}`}>
-                                    <p className="text-[10px] font-black opacity-30 mb-4 tracking-widest uppercase">System Theme</p>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <button onClick={() => {setTheme('light'); localStorage.setItem('trunks_theme', 'light');}} className={`py-4 rounded-2xl font-bold text-xs border-2 ${theme === 'light' ? 'border-blue-600 text-blue-600 bg-blue-50' : 'border-slate-800'}`}>LIGHT</button>
-                                        <button onClick={() => {setTheme('dark'); localStorage.setItem('trunks_theme', 'dark');}} className={`py-4 rounded-2xl font-bold text-xs border-2 ${theme === 'dark' ? 'border-blue-600 text-blue-400 bg-slate-800' : 'border-slate-800'}`}>DARK</button>
-                                    </div>
-                                </div>
-                                <div className={`p-6 rounded-[2.5rem] border ${card}`}>
-                                    <p className="text-[10px] font-black opacity-30 mb-4 tracking-widest uppercase text-blue-500 text-center">Cloud Storage</p>
-                                    <div className="py-8 text-center px-4">
-                                        <p className="text-xs opacity-40 leading-relaxed italic">"現在ローカルマテリアとして保存中です。クラウド同期を有効にすると、旅先でもデータを引き継げます。"</p>
-                                    </div>
-                                    <button onClick={exportBackup} className={`w-full py-5 bg-blue-600 text-white rounded-[1.5rem] font-black text-xs flex items-center justify-center gap-2 shadow-xl active:scale-95 transition ${isExporting ? 'opacity-50' : ''}`}>
-                                        <Svg.Download /> {isExporting ? 'EXPORTING...' : 'データをバックアップ (JSON)'}
-                                    </button>
-                                </div>
-                                <div className={`p-6 rounded-[2.5rem] border border-red-500/10 ${card}`}>
-                                    <p className="text-[10px] font-black opacity-30 mb-4 tracking-widest uppercase text-red-500">Danger Zone</p>
-                                    <button onClick={() => confirm("全記録を消去しますか？") && saveLogs([])} className="w-full py-4 text-red-500 font-bold text-xs bg-red-500/10 rounded-2xl border border-red-500/20 active:bg-red-500/20">ログを全消去</button>
-                                </div>
-                            </div>
-                        )}
-                    </main>
-
-                    {/* --- Modal Layer: Independent Preview --- */}
-                    {selectedLog && (
-                        <div className="modal-layer animate-in fade-in duration-300">
-                            <div className="flex justify-end p-6 sticky top-0 bg-transparent z-50">
-                                <button onClick={() => setSelectedLog(null)} className="w-12 h-12 flex items-center justify-center bg-white/10 rounded-full backdrop-blur-md text-white"><Svg.X /></button>
-                            </div>
-                            
-                            <div className="modal-content custom-scrollbar">
-                                <div className="max-w-xs mx-auto w-full">
-                                    <img src={selectedLog.image} className="w-full rounded-[2.5rem] shadow-2xl mb-8 border border-white/10 shadow-blue-900/20" />
-                                    
-                                    <div className="space-y-6">
-                                        <div>
-                                            <div className="flex justify-between items-end mb-1">
-                                                <h2 className="text-4xl font-black tracking-tighter text-white">{selectedLog.brand || '---'}</h2>
-                                                <span className="text-[10px] font-mono opacity-40 mb-1">{new Date(selectedLog.date).toLocaleDateString()}</span>
-                                            </div>
-                                            <div className="inline-block px-4 py-1.5 bg-blue-600 rounded-full text-[10px] font-black tracking-widest uppercase">{selectedLog.design}</div>
-                                        </div>
-
-                                        <div className="p-6 bg-white/5 rounded-3xl border border-white/5">
-                                            <p className="text-sm opacity-80 leading-relaxed italic">
-                                                {selectedLog.memo || "No logs recorded for this item."}
-                                            </p>
-                                        </div>
-
-                                        <div className="space-y-3 pb-20">
-                                            <button 
-                                                onClick={() => downloadImage(selectedLog.image, `trunks_${selectedLog.id}.png`)} 
-                                                className="w-full py-5 bg-white text-slate-900 rounded-[1.5rem] text-[12px] font-black tracking-widest flex items-center justify-center gap-2 active:scale-95 transition shadow-lg"
-                                            >
-                                                <Svg.Image /> 画像をスマホに保存
-                                            </button>
-                                            <button 
-                                                onClick={() => confirm("削除しますか？") && (saveLogs(logs.filter(l => l.id !== selectedLog.id)), setSelectedLog(null))} 
-                                                className="w-full py-4 text-red-500 text-[10px] font-black opacity-40 flex items-center justify-center gap-2 tracking-widest uppercase hover:opacity-100 transition"
-                                            >
-                                                <Svg.Trash /> 記録を破棄する
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* --- Modal Layer: Add Log --- */}
-                    {capturedImage && (
-                        <div className="modal-layer animate-in slide-in-from-bottom duration-500">
-                             <div className="modal-content custom-scrollbar">
-                                <div className="max-w-sm mx-auto w-full">
-                                    <img src={capturedImage} className="w-full aspect-[4/5] object-cover rounded-[3rem] shadow-2xl mb-8 border border-white/5" />
-                                    <div className="space-y-4 px-2">
-                                        <div className="grid grid-cols-3 gap-2">
-                                            {designOptions.map(o => (
-                                                <button key={o} onClick={() => setDesign(o)} className={`py-3 text-[10px] font-black rounded-xl border-2 transition-all ${design === o ? 'border-blue-600 bg-blue-600 text-white' : 'border-white/5 opacity-30'}`}>{o}</button>
-                                            ))}
-                                        </div>
-                                        <input value={brand} onChange={e => setBrand(e.target.value)} placeholder="BRAND (BVD, Uniqlo...)" className="w-full p-5 rounded-2xl bg-white/5 border-none font-bold text-sm focus:bg-white/10 transition shadow-inner" />
-                                        <textarea value={memo} onChange={e => setMemo(e.target.value)} placeholder="MEMO (車中泊の思い出...)" className="w-full p-5 rounded-2xl bg-white/5 border-none text-sm h-32 leading-relaxed focus:bg-white/10 transition shadow-inner" />
-                                        
-                                        <div className="flex gap-4 pt-4 pb-20">
-                                            <button onClick={() => setCapturedImage(null)} className="flex-1 font-bold text-xs opacity-30">戻る</button>
-                                            <button onClick={handleSave} className="flex-1 py-5 bg-blue-600 text-white rounded-[2rem] font-black text-xs shadow-xl shadow-blue-600/40 active:scale-95 transition">ログを保存</button>
-                                        </div>
-                                    </div>
-                                </div>
-                             </div>
-                        </div>
-                    )}
-
-                    {/* --- Bottom Navigation --- */}
-                    <div className="fixed bottom-0 left-0 right-0 flex justify-center p-8 z-40 pointer-events-none">
-                        <nav className={`w-full max-w-md h-20 px-6 rounded-[2.5rem] border shadow-2xl flex justify-between items-center backdrop-blur-3xl pointer-events-auto ${isDark ? 'bg-slate-900/90 border-white/5' : 'bg-white/95 border-slate-200 shadow-xl'}`}>
-                            <div className="flex items-center gap-10">
-                                <button onClick={() => setView('history')} className={`transition-all ${view === 'history' ? 'text-blue-500 scale-110' : 'opacity-30 active:opacity-60'}`}><Svg.History /></button>
-                                <button onClick={() => setView('calendar')} className={`transition-all ${view === 'calendar' ? 'text-blue-500 scale-110' : 'opacity-30 active:opacity-60'}`}><Svg.Calendar /></button>
-                            </div>
-
-                            <div className="absolute left-1/2 -translate-x-1/2 -top-6">
-                                <button 
-                                    onClick={() => fileInputRef.current.click()} 
-                                    className="w-18 h-18 bg-blue-600 rounded-[2rem] flex items-center justify-center text-white shadow-2xl shadow-blue-600/40 transform active:scale-90 transition-all duration-300"
-                                >
-                                    <Svg.Plus />
-                                </button>
-                                <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
-                            </div>
-
-                            <div className="flex items-center gap-10">
-                                <div className="w-4"></div>
-                                <button onClick={() => setView('settings')} className={`transition-all ${view === 'settings' ? 'text-blue-500 scale-110' : 'opacity-30 active:opacity-60'}`}><Svg.Settings /></button>
-                            </div>
-                        </nav>
-                    </div>
-
+          {/* Note List */}
+          <div className="flex-1 overflow-y-auto px-2 space-y-1 py-2 mt-2 border-t border-slate-100 dark:border-slate-800">
+            <p className="px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">Recent Logs</p>
+            {filteredNotes.map(note => {
+              const design = getDesign(note.design);
+              return (
+                <div 
+                  key={note.id}
+                  onClick={() => {
+                    setActiveNoteId(note.id);
+                    setCurrentView('editor');
+                    if (window.innerWidth < 1024) setIsSidebarOpen(false);
+                  }}
+                  className={`group p-3 rounded-xl cursor-pointer transition-all flex justify-between items-start 
+                    ${activeNoteId === note.id && currentView === 'editor' ? (darkMode ? 'bg-slate-700 shadow-md' : 'bg-indigo-50 shadow-sm') : (darkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-50')}`}
+                >
+                  <div className="truncate pr-2">
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase ${design.color}`}>{design.label}</span>
+                    <h3 className={`font-bold text-sm truncate mt-1 ${activeNoteId === note.id ? 'text-indigo-500' : ''}`}>{note.title || '無題のログ'}</h3>
+                  </div>
+                  <button onClick={(e) => deleteNote(note.id, e)} className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-500 transition-opacity">
+                    <Trash2 size={14} />
+                  </button>
                 </div>
-            );
-        };
+              );
+            })}
+          </div>
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
-</html>
+          {/* Bottom Bar */}
+          <div className={`p-4 border-t flex items-center justify-between ${darkMode ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+            <div className="flex items-center gap-2">
+              <Database size={14} className="text-slate-400" />
+              <span className="text-[10px] font-mono text-slate-400">{cacheSize}</span>
+            </div>
+            <button 
+              onClick={() => { setCurrentView('settings'); setIsSidebarOpen(false); }}
+              className={`p-2 rounded-lg transition-colors ${currentView === 'settings' ? 'text-indigo-500' : (darkMode ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-white text-slate-500')}`}
+            >
+              <Settings size={18} />
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col relative min-w-0">
+        <header className={`h-16 border-b px-4 flex items-center justify-between z-10 transition-colors ${darkMode ? 'bg-[#0f172a]/80 border-slate-800' : 'bg-white/80 border-slate-100'} backdrop-blur-md`}>
+          <div className="flex items-center gap-4">
+            <button onClick={() => setIsSidebarOpen(true)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
+              <Menu size={24} />
+            </button>
+            <h2 className="font-bold text-sm uppercase tracking-widest text-slate-400">
+              {currentView === 'gallery' ? 'Gallery' : currentView === 'settings' ? 'Settings' : 'Editor'}
+            </h2>
+          </div>
+          {activeNote && currentView === 'editor' && (
+            <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/10 text-emerald-500 rounded-full text-[10px] font-black border border-emerald-500/20">
+              <Save size={12} />
+              <span className="tracking-tighter uppercase">Sync Local</span>
+            </div>
+          )}
+        </header>
+
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 flex justify-center">
+          
+          {currentView === 'settings' ? (
+            /* --- Settings View --- */
+            <div className="w-full max-w-xl space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
+              <h2 className="text-3xl font-black tracking-tight">SETTING</h2>
+              <div className={`p-6 rounded-3xl space-y-6 ${darkMode ? 'bg-slate-800/50' : 'bg-white border shadow-sm'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {darkMode ? <Moon size={20} className="text-indigo-400"/> : <Sun size={20} className="text-amber-500"/>}
+                    <span className="font-bold">ダークモード</span>
+                  </div>
+                  <button onClick={() => setDarkMode(!darkMode)} className={`w-14 h-7 rounded-full relative transition-colors ${darkMode ? 'bg-indigo-600' : 'bg-slate-200'}`}>
+                    <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${darkMode ? 'left-8' : 'left-1'}`} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+          ) : currentView === 'gallery' ? (
+            /* --- Gallery View --- */
+            <div className="w-full max-w-5xl space-y-8 animate-in fade-in duration-500">
+              <div className="flex items-center justify-between">
+                <h2 className="text-3xl font-black tracking-tight uppercase">Photo Gallery</h2>
+                <span className="text-xs font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">{imagesOnly.length} Photos</span>
+              </div>
+              
+              {imagesOnly.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {imagesOnly.map(note => (
+                    <div 
+                      key={note.id} 
+                      onClick={() => { setActiveNoteId(note.id); setCurrentView('editor'); }}
+                      className="group relative aspect-square overflow-hidden rounded-2xl cursor-pointer border-2 border-transparent hover:border-indigo-500 transition-all shadow-md"
+                    >
+                      <img src={note.image} alt={note.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
+                        <p className="text-white text-[10px] font-bold truncate">{note.title || '無題のログ'}</p>
+                        <p className="text-white/60 text-[8px]">{new Date(note.updatedAt).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-20 text-slate-300">
+                  <ImageIcon size={64} strokeWidth={1} />
+                  <p className="mt-4 font-bold">まだ画像がありません</p>
+                </div>
+              )}
+            </div>
+
+          ) : activeNote ? (
+            /* --- Editor View --- */
+            <div className="w-full max-w-2xl space-y-8 animate-in fade-in duration-500">
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                  <Layers size={12} /> Trunks Design
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {TRUNKS_DESIGNS.map((d) => (
+                    <button
+                      key={d.id}
+                      onClick={() => updateNote('design', d.id)}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border-2 ${
+                        activeNote.design === d.id ? `${d.color} border-current` : (darkMode ? 'bg-slate-800 border-slate-700 text-slate-500' : 'bg-white border-slate-100 text-slate-400')
+                      }`}
+                    >
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="relative group cursor-pointer" onClick={() => fileInputRef.current.click()}>
+                  {activeNote.image ? (
+                    <div className="relative">
+                      <img src={activeNote.image} alt="Preview" className="w-full h-64 object-cover rounded-3xl shadow-lg border-2 border-slate-200 dark:border-slate-700" />
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); updateNote('image', null); }}
+                        className="absolute top-4 right-4 p-2 bg-black/50 text-white rounded-full hover:bg-red-500 transition-colors"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className={`w-full h-32 border-2 border-dashed rounded-3xl flex flex-col items-center justify-center gap-2 transition-colors ${darkMode ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-200 hover:bg-slate-50 text-slate-400'}`}>
+                      <ImageIcon size={24} />
+                      <span className="text-xs font-bold">画像を追加</span>
+                    </div>
+                  )}
+                  <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
+                </div>
+
+                <input 
+                  type="text"
+                  className="w-full text-4xl font-black bg-transparent border-none outline-none focus:ring-0 placeholder-slate-300 dark:placeholder-slate-700"
+                  placeholder="LOG TITLE..."
+                  value={activeNote.title}
+                  onChange={(e) => updateNote('title', e.target.value)}
+                />
+                
+                <textarea 
+                  className="w-full h-[calc(100vh-500px)] text-lg bg-transparent border-none outline-none focus:ring-0 resize-none leading-relaxed placeholder-slate-300 dark:placeholder-slate-700"
+                  placeholder="人混みを離れ、静かな場所で綴る言葉..."
+                  value={activeNote.content}
+                  onChange={(e) => updateNote('content', e.target.value)}
+                />
+              </div>
+            </div>
+          ) : (
+            /* --- Empty State --- */
+            <div className="flex flex-col items-center justify-center h-full text-slate-300 dark:text-slate-700">
+              <Wind size={80} strokeWidth={1} />
+              <p className="mt-4 font-black tracking-[0.3em] uppercase">No Record Selected</p>
+              <p className="text-xs mt-2 opacity-50">右下のプラスボタンから新しいログを作成してください</p>
+            </div>
+          )}
+        </div>
+
+        {/* Floating Action Button */}
+        <button 
+          onClick={createNewNote}
+          className="fixed bottom-8 right-8 w-16 h-16 bg-indigo-600 text-white rounded-full shadow-2xl flex items-center justify-center hover:bg-indigo-700 hover:scale-110 active:scale-95 transition-all z-20 group"
+        >
+          <Plus size={36} className="group-hover:rotate-90 transition-transform duration-300" />
+        </button>
+      </main>
+    </div>
+  );
+};
+
+export default App;
 
