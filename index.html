@@ -1,383 +1,317 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Menu, 
-  Plus, 
-  Trash2, 
-  Search, 
-  X, 
-  Save, 
-  Database,
-  Wind,
-  Layers,
-  Image as ImageIcon,
-  Sun,
-  Moon,
-  Settings,
-  ArrowLeft,
-  LayoutGrid
-} from 'lucide-react';
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TRUNKS LOG - Stable Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; transition: background-color 0.3s, color 0.3s; }
+        .dark { background-color: #0f172a; color: #f8fafc; }
+        .hide-scroll::-webkit-scrollbar { display: none; }
+        .fab-shadow { box-shadow: 0 10px 25px -5px rgba(79, 70, 229, 0.4); }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 h-screen overflow-hidden">
+    <div id="app" class="flex h-full w-full">
+        <!-- Sidebar Overlay -->
+        <div id="sidebarOverlay" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 hidden lg:hidden"></div>
 
-const App = () => {
-  const STORAGE_KEY = 'trunks_log_data';
-  const SETTINGS_KEY = 'trunks_log_settings';
-
-  // --- States ---
-  const [notes, setNotes] = useState([]);
-  const [activeNoteId, setActiveNoteId] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [currentView, setCurrentView] = useState('editor'); // 'editor', 'settings', 'gallery'
-  const [darkMode, setDarkMode] = useState(false);
-  const [cacheSize, setCacheSize] = useState('0 KB');
-  const fileInputRef = useRef(null);
-
-  // --- Constants ---
-  const TRUNKS_DESIGNS = [
-    { id: 'check', label: 'チェック', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
-    { id: 'stripe', label: 'ストライプ', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
-    { id: 'plain', label: '無地', color: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' },
-    { id: 'pattern', label: '総柄', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' },
-    { id: 'special', label: '特別仕様', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' }
-  ];
-
-  // --- Effects ---
-  useEffect(() => {
-    const savedNotes = localStorage.getItem(STORAGE_KEY);
-    if (savedNotes) {
-      try { setNotes(JSON.parse(savedNotes)); } catch (e) { console.error(e); }
-    }
-    const savedSettings = localStorage.getItem(SETTINGS_KEY);
-    if (savedSettings) {
-      try {
-        const settings = JSON.parse(savedSettings);
-        setDarkMode(settings.darkMode || false);
-      } catch (e) { console.error(e); }
-    }
-    calculateCacheSize();
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
-    calculateCacheSize();
-  }, [notes]);
-
-  useEffect(() => {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ darkMode }));
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [darkMode]);
-
-  // --- Handlers ---
-  const calculateCacheSize = () => {
-    try {
-      const data = JSON.stringify(localStorage);
-      const sizeInBytes = new Blob([data]).size;
-      setCacheSize(sizeInBytes < 1024 ? `${sizeInBytes} B` : `${(sizeInBytes / 1024).toFixed(2)} KB`);
-    } catch (e) { setCacheSize('Unknown'); }
-  };
-
-  const createNewNote = () => {
-    const newNote = {
-      id: Date.now().toString(),
-      title: '',
-      content: '',
-      design: 'plain',
-      image: null,
-      updatedAt: new Date().toISOString()
-    };
-    setNotes([newNote, ...notes]);
-    setActiveNoteId(newNote.id);
-    setCurrentView('editor');
-    setIsSidebarOpen(false);
-  };
-
-  const updateNote = (field, value) => {
-    setNotes(notes.map(n => 
-      n.id === activeNoteId 
-        ? { ...n, [field]: value, updatedAt: new Date().toISOString() } 
-        : n
-    ));
-  };
-
-  const deleteNote = (id, e) => {
-    e?.stopPropagation();
-    if (window.confirm('このログを削除しますか？')) {
-      const updatedNotes = notes.filter(n => n.id !== id);
-      setNotes(updatedNotes);
-      if (activeNoteId === id) setActiveNoteId(null);
-    }
-  };
-
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        updateNote('image', reader.result);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const activeNote = notes.find(n => n.id === activeNoteId);
-  const filteredNotes = notes.filter(n => 
-    n.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    n.content.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const imagesOnly = notes.filter(n => n.image);
-
-  const getDesign = (id) => TRUNKS_DESIGNS.find(d => d.id === id) || TRUNKS_DESIGNS[2];
-
-  // --- UI Components ---
-  return (
-    <div className={`flex h-screen font-sans overflow-hidden transition-colors duration-300 ${darkMode ? 'bg-[#0f172a] text-slate-200' : 'bg-slate-50 text-slate-800'}`}>
-      
-      {/* Sidebar Overlay */}
-      {isSidebarOpen && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 lg:hidden" onClick={() => setIsSidebarOpen(false)} />
-      )}
-
-      {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-72 border-r transition-transform duration-300 lg:relative lg:translate-x-0 
-        ${darkMode ? 'bg-[#1e293b] border-slate-700' : 'bg-white border-slate-200'} 
-        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        
-        <div className="flex flex-col h-full">
-          {/* Logo Section */}
-          <div className="p-5 flex items-center justify-between border-b border-transparent">
-            <h1 className="font-black text-xl flex items-center gap-2 text-indigo-500 tracking-tighter cursor-pointer" onClick={() => { setCurrentView('editor'); setActiveNoteId(null); }}>
-              <Wind size={24} strokeWidth={3} />
-              <span>TRUNKS LOG</span>
-            </h1>
-            <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden p-2 text-slate-400 hover:text-slate-200">
-              <X size={20} />
-            </button>
-          </div>
-
-          {/* Search */}
-          <div className="px-4 py-2">
-            <div className="relative">
-              <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
-              <input 
-                type="text"
-                placeholder="ログを検索..."
-                className={`w-full pl-10 pr-4 py-2 border-none rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none
-                  ${darkMode ? 'bg-slate-800 text-slate-200' : 'bg-slate-100 text-slate-800'}`}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* Navigation Items */}
-          <div className="px-2 mt-2 space-y-1">
-            <button 
-              onClick={() => { setCurrentView('gallery'); setIsSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-bold transition-all ${currentView === 'gallery' ? (darkMode ? 'bg-indigo-900/30 text-indigo-400' : 'bg-indigo-50 text-indigo-600') : 'hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-            >
-              <LayoutGrid size={18} />
-              画像ギャラリー
-            </button>
-          </div>
-
-          {/* Note List */}
-          <div className="flex-1 overflow-y-auto px-2 space-y-1 py-2 mt-2 border-t border-slate-100 dark:border-slate-800">
-            <p className="px-3 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">Recent Logs</p>
-            {filteredNotes.map(note => {
-              const design = getDesign(note.design);
-              return (
-                <div 
-                  key={note.id}
-                  onClick={() => {
-                    setActiveNoteId(note.id);
-                    setCurrentView('editor');
-                    if (window.innerWidth < 1024) setIsSidebarOpen(false);
-                  }}
-                  className={`group p-3 rounded-xl cursor-pointer transition-all flex justify-between items-start 
-                    ${activeNoteId === note.id && currentView === 'editor' ? (darkMode ? 'bg-slate-700 shadow-md' : 'bg-indigo-50 shadow-sm') : (darkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-50')}`}
-                >
-                  <div className="truncate pr-2">
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase ${design.color}`}>{design.label}</span>
-                    <h3 className={`font-bold text-sm truncate mt-1 ${activeNoteId === note.id ? 'text-indigo-500' : ''}`}>{note.title || '無題のログ'}</h3>
-                  </div>
-                  <button onClick={(e) => deleteNote(note.id, e)} className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-500 transition-opacity">
-                    <Trash2 size={14} />
-                  </button>
+        <!-- Sidebar -->
+        <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-72 border-r bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 transition-transform duration-300 -translate-x-full lg:translate-x-0 lg:relative">
+            <div class="flex flex-col h-full">
+                <!-- Logo -->
+                <div class="p-5 flex items-center justify-between">
+                    <h1 class="font-black text-xl flex items-center gap-2 text-indigo-600 tracking-tighter cursor-pointer" onclick="viewEditor(null)">
+                        <i data-lucide="wind"></i>
+                        <span>TRUNKS LOG</span>
+                    </h1>
+                    <button onclick="toggleSidebar(false)" class="lg:hidden p-2 text-slate-400 hover:text-indigo-500"><i data-lucide="x"></i></button>
                 </div>
-              );
-            })}
-          </div>
 
-          {/* Bottom Bar */}
-          <div className={`p-4 border-t flex items-center justify-between ${darkMode ? 'bg-slate-900/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-            <div className="flex items-center gap-2">
-              <Database size={14} className="text-slate-400" />
-              <span className="text-[10px] font-mono text-slate-400">{cacheSize}</span>
-            </div>
-            <button 
-              onClick={() => { setCurrentView('settings'); setIsSidebarOpen(false); }}
-              className={`p-2 rounded-lg transition-colors ${currentView === 'settings' ? 'text-indigo-500' : (darkMode ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-white text-slate-500')}`}
-            >
-              <Settings size={18} />
-            </button>
-          </div>
-        </div>
-      </aside>
-
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col relative min-w-0">
-        <header className={`h-16 border-b px-4 flex items-center justify-between z-10 transition-colors ${darkMode ? 'bg-[#0f172a]/80 border-slate-800' : 'bg-white/80 border-slate-100'} backdrop-blur-md`}>
-          <div className="flex items-center gap-4">
-            <button onClick={() => setIsSidebarOpen(true)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors">
-              <Menu size={24} />
-            </button>
-            <h2 className="font-bold text-sm uppercase tracking-widest text-slate-400">
-              {currentView === 'gallery' ? 'Gallery' : currentView === 'settings' ? 'Settings' : 'Editor'}
-            </h2>
-          </div>
-          {activeNote && currentView === 'editor' && (
-            <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/10 text-emerald-500 rounded-full text-[10px] font-black border border-emerald-500/20">
-              <Save size={12} />
-              <span className="tracking-tighter uppercase">Sync Local</span>
-            </div>
-          )}
-        </header>
-
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 flex justify-center">
-          
-          {currentView === 'settings' ? (
-            /* --- Settings View --- */
-            <div className="w-full max-w-xl space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
-              <h2 className="text-3xl font-black tracking-tight">SETTING</h2>
-              <div className={`p-6 rounded-3xl space-y-6 ${darkMode ? 'bg-slate-800/50' : 'bg-white border shadow-sm'}`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    {darkMode ? <Moon size={20} className="text-indigo-400"/> : <Sun size={20} className="text-amber-500"/>}
-                    <span className="font-bold">ダークモード</span>
-                  </div>
-                  <button onClick={() => setDarkMode(!darkMode)} className={`w-14 h-7 rounded-full relative transition-colors ${darkMode ? 'bg-indigo-600' : 'bg-slate-200'}`}>
-                    <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${darkMode ? 'left-8' : 'left-1'}`} />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-          ) : currentView === 'gallery' ? (
-            /* --- Gallery View --- */
-            <div className="w-full max-w-5xl space-y-8 animate-in fade-in duration-500">
-              <div className="flex items-center justify-between">
-                <h2 className="text-3xl font-black tracking-tight uppercase">Photo Gallery</h2>
-                <span className="text-xs font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">{imagesOnly.length} Photos</span>
-              </div>
-              
-              {imagesOnly.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {imagesOnly.map(note => (
-                    <div 
-                      key={note.id} 
-                      onClick={() => { setActiveNoteId(note.id); setCurrentView('editor'); }}
-                      className="group relative aspect-square overflow-hidden rounded-2xl cursor-pointer border-2 border-transparent hover:border-indigo-500 transition-all shadow-md"
-                    >
-                      <img src={note.image} alt={note.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
-                        <p className="text-white text-[10px] font-bold truncate">{note.title || '無題のログ'}</p>
-                        <p className="text-white/60 text-[8px]">{new Date(note.updatedAt).toLocaleDateString()}</p>
-                      </div>
+                <!-- Search -->
+                <div class="px-4 py-2">
+                    <div class="relative">
+                        <i data-lucide="search" class="absolute left-3 top-2.5 text-slate-400 w-4 h-4"></i>
+                        <input type="text" id="searchInput" placeholder="検索..." oninput="renderList()" class="w-full pl-10 pr-4 py-2 bg-slate-100 dark:bg-slate-800 border-none rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
                     </div>
-                  ))}
                 </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-20 text-slate-300">
-                  <ImageIcon size={64} strokeWidth={1} />
-                  <p className="mt-4 font-bold">まだ画像がありません</p>
-                </div>
-              )}
-            </div>
 
-          ) : activeNote ? (
-            /* --- Editor View --- */
-            <div className="w-full max-w-2xl space-y-8 animate-in fade-in duration-500">
-              <div className="space-y-3">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                  <Layers size={12} /> Trunks Design
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {TRUNKS_DESIGNS.map((d) => (
-                    <button
-                      key={d.id}
-                      onClick={() => updateNote('design', d.id)}
-                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border-2 ${
-                        activeNote.design === d.id ? `${d.color} border-current` : (darkMode ? 'bg-slate-800 border-slate-700 text-slate-500' : 'bg-white border-slate-100 text-slate-400')
-                      }`}
-                    >
-                      {d.label}
+                <!-- Nav -->
+                <div class="px-2 mt-4 space-y-1">
+                    <button onclick="viewGallery()" id="navGallery" class="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-bold transition-all hover:bg-slate-100 dark:hover:bg-slate-800">
+                        <i data-lucide="layout-grid" class="w-4 h-4"></i> 画像ギャラリー
                     </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div className="relative group cursor-pointer" onClick={() => fileInputRef.current.click()}>
-                  {activeNote.image ? (
-                    <div className="relative">
-                      <img src={activeNote.image} alt="Preview" className="w-full h-64 object-cover rounded-3xl shadow-lg border-2 border-slate-200 dark:border-slate-700" />
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); updateNote('image', null); }}
-                        className="absolute top-4 right-4 p-2 bg-black/50 text-white rounded-full hover:bg-red-500 transition-colors"
-                      >
-                        <X size={16} />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className={`w-full h-32 border-2 border-dashed rounded-3xl flex flex-col items-center justify-center gap-2 transition-colors ${darkMode ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-200 hover:bg-slate-50 text-slate-400'}`}>
-                      <ImageIcon size={24} />
-                      <span className="text-xs font-bold">画像を追加</span>
-                    </div>
-                  )}
-                  <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
                 </div>
 
-                <input 
-                  type="text"
-                  className="w-full text-4xl font-black bg-transparent border-none outline-none focus:ring-0 placeholder-slate-300 dark:placeholder-slate-700"
-                  placeholder="LOG TITLE..."
-                  value={activeNote.title}
-                  onChange={(e) => updateNote('title', e.target.value)}
-                />
-                
-                <textarea 
-                  className="w-full h-[calc(100vh-500px)] text-lg bg-transparent border-none outline-none focus:ring-0 resize-none leading-relaxed placeholder-slate-300 dark:placeholder-slate-700"
-                  placeholder="人混みを離れ、静かな場所で綴る言葉..."
-                  value={activeNote.content}
-                  onChange={(e) => updateNote('content', e.target.value)}
-                />
-              </div>
-            </div>
-          ) : (
-            /* --- Empty State --- */
-            <div className="flex flex-col items-center justify-center h-full text-slate-300 dark:text-slate-700">
-              <Wind size={80} strokeWidth={1} />
-              <p className="mt-4 font-black tracking-[0.3em] uppercase">No Record Selected</p>
-              <p className="text-xs mt-2 opacity-50">右下のプラスボタンから新しいログを作成してください</p>
-            </div>
-          )}
-        </div>
+                <!-- List -->
+                <div class="flex-1 overflow-y-auto px-2 space-y-1 py-4 border-t border-slate-100 dark:border-slate-800 mt-2" id="noteList">
+                    <!-- Notes render here -->
+                </div>
 
-        {/* Floating Action Button */}
-        <button 
-          onClick={createNewNote}
-          className="fixed bottom-8 right-8 w-16 h-16 bg-indigo-600 text-white rounded-full shadow-2xl flex items-center justify-center hover:bg-indigo-700 hover:scale-110 active:scale-95 transition-all z-20 group"
-        >
-          <Plus size={36} className="group-hover:rotate-90 transition-transform duration-300" />
-        </button>
-      </main>
+                <!-- Bottom -->
+                <div class="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex items-center justify-between">
+                    <div class="flex items-center gap-2 text-[10px] font-mono text-slate-400 uppercase tracking-widest">
+                        <i data-lucide="database" class="w-3 h-3"></i>
+                        <span id="cacheDisplay">0 KB</span>
+                    </div>
+                    <button onclick="viewSettings()" class="p-2 text-slate-400 hover:text-indigo-500"><i data-lucide="settings" class="w-5 h-5"></i></button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 flex flex-col relative min-w-0 h-full bg-white dark:bg-slate-950">
+            <header class="h-16 border-b border-slate-100 dark:border-slate-800 px-4 flex items-center justify-between">
+                <button onclick="toggleSidebar(true)" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl lg:hidden transition-colors">
+                    <i data-lucide="menu"></i>
+                </button>
+                <div id="headerStatus" class="hidden">
+                    <div class="flex items-center gap-2 px-3 py-1 bg-emerald-500/10 text-emerald-500 rounded-full text-[10px] font-black border border-emerald-500/20">
+                        <i data-lucide="save" class="w-3 h-3"></i> <span>SYNCED</span>
+                    </div>
+                </div>
+            </header>
+
+            <div id="contentArea" class="flex-1 overflow-y-auto p-4 md:p-12 flex justify-center">
+                <!-- Editor, Gallery, or Settings renders here -->
+            </div>
+
+            <!-- FAB -->
+            <button onclick="createNewNote()" class="fixed bottom-8 right-8 w-16 h-16 bg-indigo-600 text-white rounded-full fab-shadow flex items-center justify-center hover:bg-indigo-700 hover:scale-110 active:scale-95 transition-all z-30 group">
+                <i data-lucide="plus" class="w-8 h-8 group-hover:rotate-90 transition-transform duration-300"></i>
+            </button>
+        </main>
     </div>
-  );
-};
 
-export default App;
+    <script>
+        // --- Core State ---
+        let notes = JSON.parse(localStorage.getItem('trunks_log_data') || '[]');
+        let activeNoteId = null;
+        let currentView = 'editor'; // 'editor', 'gallery', 'settings'
+        let darkMode = JSON.parse(localStorage.getItem('trunks_log_settings') || '{"darkMode":false}').darkMode;
+
+        const DESIGNS = [
+            { id: 'check', label: 'チェック', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30' },
+            { id: 'stripe', label: 'ストライプ', color: 'bg-green-100 text-green-700 dark:bg-green-900/30' },
+            { id: 'plain', label: '無地', color: 'bg-slate-100 text-slate-700 dark:bg-slate-800' },
+            { id: 'pattern', label: '総柄', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30' },
+            { id: 'special', label: '特別仕様', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30' }
+        ];
+
+        // --- Init ---
+        function init() {
+            lucide.createIcons();
+            applyTheme();
+            renderList();
+            renderContent();
+            calculateCache();
+        }
+
+        function applyTheme() {
+            if (darkMode) document.body.classList.add('dark');
+            else document.body.classList.remove('dark');
+            localStorage.setItem('trunks_log_settings', JSON.stringify({ darkMode }));
+        }
+
+        // --- Handlers ---
+        function saveData() {
+            localStorage.setItem('trunks_log_data', JSON.stringify(notes));
+            calculateCache();
+        }
+
+        function calculateCache() {
+            const size = new Blob([JSON.stringify(localStorage)]).size;
+            document.getElementById('cacheDisplay').innerText = size < 1024 ? `${size} B` : `${(size / 1024).toFixed(2)} KB`;
+        }
+
+        function toggleSidebar(show) {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            if (show) {
+                sidebar.classList.remove('-translate-x-full');
+                overlay.classList.remove('hidden');
+            } else {
+                sidebar.classList.add('-translate-x-full');
+                overlay.classList.add('hidden');
+            }
+        }
+
+        function createNewNote() {
+            const newNote = {
+                id: Date.now().toString(),
+                title: '',
+                content: '',
+                design: 'plain',
+                image: null,
+                updatedAt: new Date().toISOString()
+            };
+            notes.unshift(newNote);
+            activeNoteId = newNote.id;
+            currentView = 'editor';
+            saveData();
+            renderList();
+            renderContent();
+            toggleSidebar(false);
+        }
+
+        function deleteNote(id, e) {
+            e.stopPropagation();
+            if (!confirm('このログを削除しますか？')) return;
+            notes = notes.filter(n => n.id !== id);
+            if (activeNoteId === id) activeNoteId = null;
+            saveData();
+            renderList();
+            renderContent();
+        }
+
+        function updateNote(field, value) {
+            const note = notes.find(n => n.id === activeNoteId);
+            if (note) {
+                note[field] = value;
+                note.updatedAt = new Date().toISOString();
+                saveData();
+                renderList();
+            }
+        }
+
+        // --- View Switchers ---
+        function viewEditor(id) {
+            activeNoteId = id;
+            currentView = 'editor';
+            renderContent();
+            renderList();
+            toggleSidebar(false);
+        }
+
+        function viewGallery() {
+            currentView = 'gallery';
+            activeNoteId = null;
+            renderContent();
+            renderList();
+            toggleSidebar(false);
+        }
+
+        function viewSettings() {
+            currentView = 'settings';
+            activeNoteId = null;
+            renderContent();
+            renderList();
+            toggleSidebar(false);
+        }
+
+        // --- Renderers ---
+        function renderList() {
+            const container = document.getElementById('noteList');
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const filtered = notes.filter(n => n.title.toLowerCase().includes(query) || n.content.toLowerCase().includes(query));
+
+            container.innerHTML = filtered.map(n => {
+                const design = DESIGNS.find(d => d.id === n.design) || DESIGNS[2];
+                const isActive = activeNoteId === n.id && currentView === 'editor';
+                return `
+                    <div onclick="viewEditor('${n.id}')" class="group p-3 rounded-xl cursor-pointer transition-all flex justify-between items-start ${isActive ? 'bg-indigo-50 dark:bg-indigo-900/20 shadow-sm' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'}">
+                        <div class="truncate pr-2">
+                            <span class="text-[9px] px-1.5 py-0.5 rounded font-black uppercase ${design.color}">${design.label}</span>
+                            <h3 class="font-bold text-sm truncate mt-1 ${isActive ? 'text-indigo-600 dark:text-indigo-400' : ''}">${n.title || '無題のログ'}</h3>
+                        </div>
+                        <button onclick="deleteNote('${n.id}', event)" class="opacity-0 group-hover:opacity-100 p-1 text-slate-300 hover:text-red-500 transition-opacity">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                `;
+            }).join('');
+            lucide.createIcons();
+        }
+
+        function renderContent() {
+            const area = document.getElementById('contentArea');
+            const headerStatus = document.getElementById('headerStatus');
+            headerStatus.classList.toggle('hidden', currentView !== 'editor' || !activeNoteId);
+
+            if (currentView === 'settings') {
+                area.innerHTML = `
+                    <div class="w-full max-w-xl space-y-8 animate-in fade-in duration-300">
+                        <h2 class="text-3xl font-black tracking-tight">SETTING</h2>
+                        <div class="p-6 bg-slate-100/50 dark:bg-slate-800/50 rounded-3xl space-y-6">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold">ダークモード</span>
+                                <button onclick="darkMode = !darkMode; applyTheme(); renderContent();" class="w-14 h-7 rounded-full relative transition-colors ${darkMode ? 'bg-indigo-600' : 'bg-slate-300'}">
+                                    <div class="absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${darkMode ? 'left-8' : 'left-1'}"></div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else if (currentView === 'gallery') {
+                const images = notes.filter(n => n.image);
+                area.innerHTML = `
+                    <div class="w-full max-w-5xl space-y-8 animate-in fade-in duration-300">
+                        <h2 class="text-3xl font-black tracking-tight">GALLERY</h2>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            ${images.map(n => `
+                                <div onclick="viewEditor('${n.id}')" class="aspect-square rounded-2xl overflow-hidden cursor-pointer hover:ring-4 ring-indigo-500 transition-all shadow-lg group relative">
+                                    <img src="${n.image}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500">
+                                    <div class="absolute inset-0 bg-black/40 flex items-end p-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <p class="text-white text-[10px] font-bold truncate">${n.title || '無題'}</p>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        ${images.length === 0 ? '<p class="text-center text-slate-400 py-20">画像がまだありません</p>' : ''}
+                    </div>
+                `;
+            } else if (activeNoteId) {
+                const note = notes.find(n => n.id === activeNoteId);
+                area.innerHTML = `
+                    <div class="w-full max-w-2xl space-y-6 animate-in fade-in duration-500">
+                        <div class="flex flex-wrap gap-2">
+                            ${DESIGNS.map(d => `
+                                <button onclick="updateNote('design', '${d.id}'); renderContent();" class="px-4 py-1.5 rounded-xl text-[10px] font-black border-2 transition-all ${note.design === d.id ? `${d.color} border-indigo-500` : 'bg-transparent border-slate-200 dark:border-slate-800 text-slate-400'}">
+                                    ${d.label.toUpperCase()}
+                                </button>
+                            `).join('')}
+                        </div>
+                        <div class="space-y-4">
+                            <div onclick="document.getElementById('fileIn').click()" class="relative group cursor-pointer">
+                                ${note.image ? `<img src="${note.image}" class="w-full h-64 object-cover rounded-3xl shadow-xl">` : `<div class="w-full h-32 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl flex flex-col items-center justify-center text-slate-300"><i data-lucide="image"></i><span class="text-xs font-bold mt-2">PHOTO ADD</span></div>`}
+                                <input type="file" id="fileIn" class="hidden" onchange="handleFile(this)">
+                            </div>
+                            <input type="text" oninput="updateNote('title', this.value)" value="${note.title}" placeholder="TITLE..." class="w-full text-4xl font-black bg-transparent border-none outline-none focus:ring-0 placeholder-slate-200 dark:placeholder-slate-800">
+                            <div class="h-px bg-slate-100 dark:bg-slate-800"></div>
+                            <textarea oninput="updateNote('content', this.value)" placeholder="綴る言葉..." class="w-full h-[calc(100vh-500px)] text-lg bg-transparent border-none outline-none focus:ring-0 resize-none leading-relaxed placeholder-slate-200 dark:placeholder-slate-800">${note.content}</textarea>
+                        </div>
+                    </div>
+                `;
+            } else {
+                area.innerHTML = `
+                    <div class="flex flex-col items-center justify-center h-full text-slate-200 dark:text-slate-800">
+                        <i data-lucide="wind" class="w-20 h-20"></i>
+                        <p class="mt-4 font-black tracking-[0.4em]">NO LOG SELECTED</p>
+                    </div>
+                `;
+            }
+            lucide.createIcons();
+        }
+
+        function handleFile(input) {
+            const file = input.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = e => {
+                    updateNote('image', e.target.result);
+                    renderContent();
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        // --- Start ---
+        window.onload = init;
+        document.getElementById('sidebarOverlay').onclick = () => toggleSidebar(false);
+    </script>
+</body>
+</html>
 
